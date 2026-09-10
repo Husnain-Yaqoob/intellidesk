@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: intellidesk
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/intellidesk}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      # Fine for M1. Milestone 2 moves this to Flyway migrations before there is
+      # any data worth keeping.
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+server:
+  port: ${PORT:8080}
+
+intellidesk:
+  seed:
+    enabled: ${SEED_DEMO_DATA:true}
+  ml:
+    base-url: ${ML_SERVICE_URL:http://localhost:8000}
+    enabled: ${ML_ENABLED:true}
+    timeout-ms: 2000
+    # Below this the classifier's answer is not trusted enough to route on.
+    confidence-threshold: 0.60
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
+
+logging:
+  level:
+    ie.intellidesk: INFO

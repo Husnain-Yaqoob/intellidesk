@@ -1,0 +1,11 @@
+# Floors rather than exact pins: this has to install on Python 3.11 through 3.13,
+# and several of these only gained 3.13 wheels in recent releases.
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2.9
+scikit-learn>=1.6
+pandas>=2.2
+numpy>=2.1
+joblib>=1.4
+pytest>=8.3
+httpx>=0.28

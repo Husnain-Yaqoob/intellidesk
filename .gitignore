@@ -1,0 +1,28 @@
+# Java
+backend/target/
+*.class
+
+# Node
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Python
+ml-service/.venv/
+ml-service/__pycache__/
+ml-service/.pytest_cache/
+**/__pycache__/
+*.pyc
+
+# Trained models and generated corpus — regenerate with `python train.py`
+ml-service/artefacts/
+ml-service/data/corpus.csv
+
+# Local config
+.env
+*.local
+
+# Editors
+.idea/
+.vscode/
+.DS_Store
