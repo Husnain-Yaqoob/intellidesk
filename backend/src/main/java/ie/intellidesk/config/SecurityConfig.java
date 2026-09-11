@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,13 +38,17 @@ public class SecurityConfig {
      * third-party API clients — there aren't any here.
      */
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, CorsConfigurationSource cors) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // Cookie-based CSRF tokens, readable by JavaScript so the SPA can echo them back.
         var csrfHandler = new CsrfTokenRequestAttributeHandler();
         csrfHandler.setCsrfRequestAttributeName(null);
 
         http
-            .cors(c -> c.configurationSource(cors))
+            // withDefaults() resolves the bean NAMED corsConfigurationSource. Injecting
+            // CorsConfigurationSource by type instead fails at startup, because Spring MVC's
+            // mvcHandlerMappingIntrospector also implements that interface — two candidates,
+            // no qualifier, no context.
+            .cors(Customizer.withDefaults())
             .csrf(csrf -> csrf
                     .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .csrfTokenRequestHandler(csrfHandler))
