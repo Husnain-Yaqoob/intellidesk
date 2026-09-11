@@ -12,6 +12,13 @@ Three services: a Spring Boot API, a React front end, and a Python ML service.
                            PostgreSQL               resolution-time model
 ```
 
+![The agent dashboard: open incidents, critical count, triage queue, average resolution time, and incidents by category](docs/dashboard.png)
+
+An incident after triage — classified, auto-assigned, with the model's confidence and the
+resolutions of the nearest past incidents shown alongside:
+
+![Incident detail showing model analysis, suggested first steps and similar past incidents](docs/incident-detail.png)
+
 ---
 
 ## Status
