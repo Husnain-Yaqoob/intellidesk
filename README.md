@@ -262,4 +262,4 @@ else moves.
   disconnects" and misses "cannot stay connected to the remote network"
 - Feed agent corrections back as training labels
 - A model-metrics page in the app, reading `/model-info`
-- Containerise all three services and deploy
+
