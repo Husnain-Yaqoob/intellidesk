@@ -88,19 +88,34 @@ public class IncidentService {
 
         MlContract.AnalyseResponse a = maybe.get();
         incident.setCategoryConfidence(a.confidence());
-        incident.setPredictedResolutionHours(a.predictedResolutionHours());
-        incident.setSlaBreachRisk(a.slaBreachRisk());
         incident.setMlModelVersion(a.modelVersion());
-        writeJson(a.similarIncidents(), incident::setMlSimilarJson);
-        writeJson(a.suggestedSteps(), incident::setMlStepsJson);
 
         if (a.confidence() < confidenceThreshold) {
+            // Nothing derived from the model is stored for an incident it could not
+            // classify — not the predicted time, not the SLA risk, not the neighbours.
+            //
+            // The predicted time and risk are computed from the predicted category,
+            // which we have just decided not to trust. The neighbours are a subtler
+            // case: the first version kept them, on the theory that a human triaging
+            // the ticket would still want to see whatever resembled it. Testing showed
+            // that was wrong. Vague text — "my computer is being weird" — matches on
+            // one incidental word ("working", "home") and produces neighbours at ~0.40
+            // that have nothing to do with the fault, while a genuine match on the same
+            // corpus scores only ~0.44. No threshold separates those two.
+            //
+            // The vagueness that defeats the classifier defeats the similarity search
+            // for the same reason. If we will not name the category, we should not
+            // offer the advice either.
             incident.setNeedsTriage(true);
             log(incident, null, "Classified as %s but confidence was only %.0f%% — queued for manual triage"
                     .formatted(a.category(), a.confidence() * 100), null);
             return;
         }
 
+        incident.setPredictedResolutionHours(a.predictedResolutionHours());
+        incident.setSlaBreachRisk(a.slaBreachRisk());
+        writeJson(a.similarIncidents(), incident::setMlSimilarJson);
+        writeJson(a.suggestedSteps(), incident::setMlStepsJson);
         incident.setCategory(a.category());
         incident.setSubcategory(a.subcategory());
         log(incident, null, "Classified as %s / %s (%.0f%% confidence)"
