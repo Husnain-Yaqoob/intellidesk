@@ -112,15 +112,6 @@ The category classifier returns a probability. Below a configurable threshold
 expensive than no assignment — it sits in the wrong team's queue being ignored,
 rather than in the triage queue being looked at.
 
-Below that threshold **nothing** derived from the model is kept — not the predicted
-time, not the SLA risk, not the similar incidents. The first version stored the
-neighbours anyway, reasoning that a human triaging the ticket would still want to see
-them. Demoing it proved that wrong: vague text matches on one incidental word, so
-"my computer is being weird" came back with neighbours at 0.41 about VPN certificates,
-while a genuine match on the same corpus scored only 0.44. No threshold separates
-those. The vagueness that defeats the classifier defeats the similarity search for the
-same reason, so if the app won't name the category it doesn't offer the advice either.
-
 ### Suggestions are retrieved, never generated
 
 "Suggested first steps" are the resolution notes from the nearest past incidents,
@@ -180,23 +171,6 @@ Current holdout figures on 1,046 incidents:
 The most-confused pairs are Account/Access ↔ Email and Hardware ↔ Network — which are
 exactly the ambiguous cases that were planted. That is the model behaving correctly,
 and `/model-info` reports it rather than hiding it behind a single accuracy number.
-
-### When the noise became the signal
-
-The generator pads tickets the way people do — "hi,", "again -", "sorry to bother you
-but", and closing lines like "I have tried restarting and it made no difference." It
-makes the text look human, and it very nearly ruined the similarity search.
-
-TF-IDF treats that padding as ordinary vocabulary, so two unrelated tickets that both
-opened with "again -" scored 40% against each other. That is how a report reading
-"still fixing the error" came back matched to a VPN certificate problem, with its
-resolution steps offered as advice. The noise added to make the data realistic had
-become the strongest feature in the model.
-
-`strip_boilerplate()` now removes it before vectorising, at training and inference
-both, and the filler words are in the stop list. With a real corpus you would derive
-that list from the data rather than hard-coding it — the most frequent n-grams that
-appear across every category are almost always boilerplate.
 
 If you get hold of a real incident export, drop it in as `ml-service/data/corpus.csv`
 with the same columns and delete the generator. Nothing else changes.
