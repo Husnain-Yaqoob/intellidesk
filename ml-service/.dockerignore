@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Regenerated inside the image by train.py — never copy a local model in, or the
+# image quietly ships whatever was last trained on someone's laptop.
+artefacts/
+data/

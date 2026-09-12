@@ -38,6 +38,23 @@ Power BI, Kubernetes. Deliberately. See *What is deliberately absent* below.
 
 ## Running it
 
+### The whole stack, one command
+
+```bash
+docker compose up --build
+```
+
+Then open **http://localhost:8080**. First build takes a few minutes — Maven downloads
+its dependencies and the ML service trains its model into the image.
+
+nginx serves the built front end and proxies `/api` to the backend, so the SPA and the
+API share an origin in production exactly as they do behind the Vite dev proxy. The
+backend waits for Postgres to be healthy before starting; it deliberately does *not*
+wait for the ML service, because incidents must still be loggable when classification
+is unavailable.
+
+### Or service by service, for development
+
 You need Java 17+, Node 20+, Python 3.11+ and Postgres (or Docker).
 
 No Maven installed? Build it in a container instead — no local Maven or JDK needed:

@@ -1,5 +1,11 @@
-# Postgres only. Containerising the three services is a Milestone 2 job — there is no
-# point writing Dockerfiles for an application whose shape is still moving.
+# The whole stack. `docker compose up --build` and open http://localhost:8080
+#
+# Start order matters: the backend waits for Postgres to pass its healthcheck,
+# because Hibernate fails hard on a database that isn't accepting connections yet.
+# It does NOT wait for the ML service — by design. An incident must still be
+# loggable when classification is unavailable, and starting without it is the
+# cheapest way to keep proving that.
+
 services:
   db:
     image: postgres:16-alpine
@@ -8,14 +14,57 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5432:5432"          # published so you can psql into it locally
     volumes:
       - intellidesk-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d intellidesk"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  ml:
+    build: ./ml-service
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/intellidesk
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      ML_SERVICE_URL: http://ml:8000
+      SEED_DEMO_DATA: "true"
+      # nginx puts the SPA and the API on one origin, so CORS should not come into
+      # play. It is set anyway, including the app's own origin: if a proxy ever
+      # rewrites the Host header the backend will classify same-origin requests as
+      # cross-origin, and without this the first symptom is a login that fails with
+      # an empty 403. Add your public URL here when deploying.
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+    ports:
+      - "8081:8080"          # direct access for debugging; the app uses nginx
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
 
 volumes:
   intellidesk-data:
