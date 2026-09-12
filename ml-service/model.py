@@ -16,7 +16,6 @@ Three jobs, deliberately kept separate:
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +25,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, mean_absolute_error
 from sklearn.model_selection import train_test_split
@@ -37,75 +36,8 @@ DATA = HERE / "data"
 ARTEFACTS = HERE / "artefacts"
 CORPUS_PATH = DATA / "corpus.csv"
 
-MODEL_VERSION = "m2-tfidf-3"
+MODEL_VERSION = "m2-tfidf-1"
 FEATURES = ["category", "priority", "impact", "urgency"]
-
-# ---------------------------------------------------------------------------
-# Boilerplate stripping
-#
-# Real tickets are padded with politeness and filler: "hi,", "sorry to bother you
-# but", "again -", and closing lines like "I have tried restarting and it made no
-# difference." None of it says anything about the fault. The corpus generator adds
-# the same padding on purpose, to make the text look like something a person wrote.
-#
-# Left in, that padding becomes the strongest signal in the similarity search. Two
-# unrelated tickets that both open with "again -" scored 40% against each other,
-# which is how "still fixing the error" ended up matched to a VPN certificate
-# problem. The noise added to make the data realistic had turned into the feature.
-#
-# So it is removed before vectorising, at training and at inference both. With a
-# real corpus you would derive this list from the data — the most frequent n-grams
-# that appear across every category are almost always boilerplate.
-# ---------------------------------------------------------------------------
-
-BOILERPLATE_PHRASES = [
-    "sorry to bother you but",
-    "quick one",
-    "urgent",
-    "again",
-    "hi",
-    "it started this week and it is stopping me working",
-    "nobody else on my team seems to have the same problem",
-    "i have tried restarting and it made no difference",
-    "this has happened twice before and was fixed at the time",
-    "it is intermittent but getting worse",
-]
-
-# Survivors of the phrase pass — the generator mangles text (drops words, swaps
-# characters), so a literal match often misses. These tokens carry no diagnostic
-# meaning in this domain, so dropping them costs nothing.
-FILLER_TOKENS = {
-    "hi", "sorry", "bother", "urgent", "quick", "again", "nobody", "else",
-    "seems", "twice", "tried", "restarting", "difference", "intermittent",
-    "worse", "happened", "stopping",
-}
-
-_BOILERPLATE_RE = re.compile(
-    "|".join(re.escape(phrase) for phrase in BOILERPLATE_PHRASES), re.IGNORECASE)
-
-STOP_WORDS = list(ENGLISH_STOP_WORDS.union(FILLER_TOKENS))
-
-
-def strip_boilerplate(text: str) -> str:
-    """Removes padding that says nothing about the fault."""
-    if not isinstance(text, str):
-        return ""
-    cleaned = _BOILERPLATE_RE.sub(" ", text)
-    cleaned = re.sub(r"[^\w\s]+", " ", cleaned)   # stray punctuation left behind
-    return re.sub(r"\s+", " ", cleaned).strip()
-
-# Minimum cosine similarity before a past incident counts as a match.
-#
-# This started at 0.10, which was far too permissive. A vague report — "my computer is
-# being weird" — came back with three neighbours at 25-30% and a confident-looking list
-# of suggested steps derived from them. The app was refusing to guess a category and
-# then handing the agent a guess anyway, which is worse than saying nothing: an agent
-# who follows advice from an unrelated ticket wastes twenty minutes and stops trusting
-# the panel.
-#
-# At 0.35 the Outlook example still returns its three real matches (0.85 / 0.78 / 0.74)
-# and the vague one returns none, so the suggestions card disappears entirely.
-SIMILARITY_FLOOR = 0.35
 
 
 @dataclass
@@ -122,9 +54,7 @@ class Bundle:
     metrics: dict
 
     def analyse(self, text: str, impact: str, urgency: str, top_k: int = 3) -> dict:
-        # Same cleaning as training — if these two ever drift apart the model is
-        # scoring against features it was never fitted on.
-        vector = self.vectoriser.transform([strip_boilerplate(text)])
+        vector = self.vectoriser.transform([text])
 
         probabilities = self.classifier.predict_proba(vector)[0]
         best = int(np.argmax(probabilities))
@@ -166,7 +96,7 @@ class Bundle:
         results = []
         for index in top:
             score = float(scores[index])
-            if score < SIMILARITY_FLOOR:
+            if score < 0.10:  # below this the "match" is noise
                 continue
             row = self.corpus.iloc[int(index)]
             results.append({
@@ -229,14 +159,13 @@ def _steps(similar: list[dict]) -> list[str]:
 
 def train(corpus_path: Path = CORPUS_PATH) -> Bundle:
     frame = pd.read_csv(corpus_path)
-    raw_text = frame["title"].fillna("") + ". " + frame["description"].fillna("")
-    frame["text"] = raw_text.map(strip_boilerplate)
+    frame["text"] = frame["title"].fillna("") + ". " + frame["description"].fillna("")
 
     train_frame, test_frame = train_test_split(
         frame, test_size=0.25, random_state=42, stratify=frame["category"])
 
     vectoriser = TfidfVectorizer(
-        ngram_range=(1, 2), min_df=2, sublinear_tf=True, stop_words=STOP_WORDS)
+        ngram_range=(1, 2), min_df=2, sublinear_tf=True, stop_words="english")
     x_train = vectoriser.fit_transform(train_frame["text"])
     x_test = vectoriser.transform(test_frame["text"])
 
