@@ -138,6 +138,12 @@ while a genuine match on the same corpus scored only 0.44. No threshold separate
 those. The vagueness that defeats the classifier defeats the similarity search for the
 same reason, so if the app won't name the category it doesn't offer the advice either.
 
+![An incident the classifier declined to route: no category, no predicted time, no SLA risk, and no suggestions card — with the activity trail recording why](docs/needs-triage.png)
+
+The activity trail still records what the model thought and how sure it was —
+*"Classified as Email but confidence was only 29% — queued for manual triage"* — so the
+decision is auditable even though none of it was acted on.
+
 ### Suggestions are retrieved, never generated
 
 "Suggested first steps" are the resolution notes from the nearest past incidents,
