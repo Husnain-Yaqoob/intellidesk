@@ -60,7 +60,14 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/assign").hasRole("AGENT")
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/status").hasRole("AGENT")
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/resolve").hasRole("AGENT")
-                    .anyRequest().authenticated())
+                    // Everything else under /api needs a session.
+                    .requestMatchers("/api/**").authenticated()
+                    // Anything that isn't /api is the front end — index.html, the hashed
+                    // asset bundles, and every client-side route. Those must be reachable
+                    // without a session or the sign-in page itself is behind sign-in.
+                    // Authorisation for the data still happens on the API calls the page
+                    // makes once it loads; none of it is decided in the browser.
+                    .anyRequest().permitAll())
             // Return 401 instead of redirecting to a login page the SPA doesn't have.
             .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(UNAUTHORIZED)))
             .logout(l -> l.disable());

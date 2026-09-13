@@ -1,0 +1,13 @@
+# Root build context — used by the single-image Dockerfile.
+.git/
+docs/
+backend/target/
+frontend/node_modules/
+frontend/dist/
+ml-service/.venv/
+ml-service/artefacts/
+ml-service/data/
+**/__pycache__/
+*.pyc
+.idea/
+.vscode/

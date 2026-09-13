@@ -53,6 +53,26 @@ backend waits for Postgres to be healthy before starting; it deliberately does *
 wait for the ML service, because incidents must still be loggable when classification
 is unavailable.
 
+### Deployed
+
+The hosted build is a different shape on purpose. The root `Dockerfile` compiles the
+React app into the Spring Boot jar, so one container serves the UI and the API from a
+single origin, and the ML service runs alongside it. Two services instead of three, no
+proxy in the path, and the same-origin guarantee the session cookie depends on comes
+from the architecture rather than from nginx passing the Host header correctly.
+
+The nginx setup above is what you would want in front of a CDN, where static assets
+should not be served by Tomcat. For a demo, one artifact is less to run.
+
+Environment variables the deployed backend needs:
+
+| Variable | Example |
+|---|---|
+| `DATABASE_URL` | `jdbc:postgresql://host:5432/railway` — JDBC form, not the `postgresql://` URL most providers hand you |
+| `DATABASE_USER` / `DATABASE_PASSWORD` | from the managed database |
+| `ML_SERVICE_URL` | the ML service's internal address |
+| `CORS_ORIGINS` | the public URL |
+
 ### Or service by service, for development
 
 You need Java 17+, Node 20+, Python 3.11+ and Postgres (or Docker).
@@ -262,4 +282,4 @@ else moves.
   disconnects" and misses "cannot stay connected to the remote network"
 - Feed agent corrections back as training labels
 - A model-metrics page in the app, reading `/model-info`
-
+- Containerise all three services and deploy
