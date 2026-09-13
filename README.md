@@ -5,6 +5,11 @@ and shows the agent how similar incidents were actually resolved.
 
 Three services: a Spring Boot API, a React front end, and a Python ML service.
 
+**Live: https://intellidesk-production.up.railway.app** — sign in as
+`agent@intellidesk.ie` / `password123`, or raise an incident yourself and watch it get
+classified, routed and matched against past tickets. The seed data is synthetic and the
+app says so; see *About the training data*.
+
 ```
   React (Vite)  ──REST──▶  Spring Boot  ──HTTP──▶  Python / FastAPI
                                │                    classification
@@ -30,6 +35,9 @@ agent queue with filters, and the dashboard.
 **Milestone 2 — the models.** The ML service is built and trained: category
 classification, similarity search over resolved incidents, and a resolution-time
 model. Wire-compatible with the backend and running independently.
+
+**Milestone 3 — deployed.** Done. Running on Railway as two services plus a managed
+Postgres, built from this repo on every push to `master`.
 
 **Not built yet:** LLM summarisation, RAG, a chatbot, Teams or email integration,
 Power BI, Kubernetes. Deliberately. See *What is deliberately absent* below.
@@ -70,8 +78,23 @@ Environment variables the deployed backend needs:
 |---|---|
 | `DATABASE_URL` | `jdbc:postgresql://host:5432/railway` — JDBC form, not the `postgresql://` URL most providers hand you |
 | `DATABASE_USER` / `DATABASE_PASSWORD` | from the managed database |
-| `ML_SERVICE_URL` | the ML service's internal address |
+| `ML_SERVICE_URL` | `http://ml.railway.internal:8000` — the ML service's address on the private network |
 | `CORS_ORIGINS` | the public URL |
+
+Two things about that private network cost more time than they should have, and both are
+worth knowing before you deploy anything similar.
+
+It is **IPv6-only**. The JVM prefers IPv4, so the backend resolves
+`ml.railway.internal` to an AAAA record and then declines to use it — hence
+`-Djava.net.preferIPv6Addresses=true` in the root `Dockerfile`. And uvicorn's usual
+`--host 0.0.0.0` binds IPv4 only, so nothing is listening on the address the backend
+finally asks for; `ml-service/Dockerfile` binds `::` instead, which is dual-stack on
+Linux and so changes nothing locally.
+
+Neither failure is loud. `MlClient` degrades to empty on any error, exactly as designed,
+so an unreachable ML service looks like a healthy app in which every incident quietly
+needs manual triage. The test after deploying is not "does the site load" — it is
+"raise an incident and check it came back with a category".
 
 ### Or service by service, for development
 
@@ -275,6 +298,47 @@ else moves.
 
 ---
 
+## Limitations
+
+What follows is true of the thing that is actually running, as opposed to the
+deliberate scope decisions above. Read it before drawing conclusions from the demo.
+
+**The hosted demo is disposable.** It runs on a Railway trial. When the credit or the
+30 days runs out the link dies, and the seeded database goes with it. Nothing is backed
+up, because there is nothing in it worth backing up. Clone the repo and
+`docker compose up --build` if the link is dead.
+
+**The demo credentials are published in this README**, so anyone can sign in and change
+anything. Every incident you see may have been edited by a stranger. There is no rate
+limiting and no sign-in auditing — appropriate for a demo, not for anything else.
+
+**The accuracy figures do not transfer.** ~0.91 category accuracy is measured on a
+corpus this repository generates. It says the pipeline learns the structure that was
+planted in the data; it says nothing about how the model would do on your tickets. On a
+real export, expect worse, and expect the confidence threshold to need retuning — 0.60
+was chosen against synthetic data, and the whole triage-versus-route decision hangs off
+it.
+
+**Similarity is lexical, not semantic.** TF-IDF matches shared words. "VPN
+disconnecting" finds "VPN disconnects" and misses "cannot stay connected to the remote
+network" entirely. An agent who gets no suggestions has not necessarily hit a novel
+problem — they may have described a common one in uncommon words.
+
+**Sessions are in memory and there is one instance.** A redeploy or a restart signs
+everyone out, and the app cannot be scaled horizontally as it stands without moving
+sessions to Redis or the database.
+
+**The schema is managed by `ddl-auto: update`.** Hibernate adds columns and never
+removes them, so the database drifts from the entities over time and a destructive
+change is not applied at all. That is fine while the data is disposable and wrong the
+moment it isn't — hence Flyway at the top of *Next*.
+
+**The model is frozen into its image.** Retraining means rebuilding and redeploying.
+That is the intended trade — it makes "what did the model say" reproducible — but it
+also means corrections agents make today change nothing until someone runs a build.
+
+---
+
 ## Next
 
 - Flyway migrations instead of `ddl-auto: update`, before there is data worth keeping
@@ -282,4 +346,5 @@ else moves.
   disconnects" and misses "cannot stay connected to the remote network"
 - Feed agent corrections back as training labels
 - A model-metrics page in the app, reading `/model-info`
-- Containerise all three services and deploy
+- A health check on the ML seam surfaced in the UI, so "the model is down" is visible
+  rather than inferred from every incident needing triage
