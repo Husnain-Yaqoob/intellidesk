@@ -151,6 +151,52 @@ def test_a_draft_with_only_invented_citations_becomes_an_abstention(bundle):
     assert "retrieved" in result["abstain_reason"]
 
 
+def test_pointer_steps_are_replaced_by_the_cited_resolution(bundle):
+    # What qwen2.5:3b actually did on its first live run: valid citations, empty steps.
+    def pointers(messages):
+        hits = retrieved(messages)[:2]
+        return submit(summary="VPN drops.", steps=[
+            {"action": f"Review past incident {h['reference']}", "source": h["reference"]} for h in hits],
+            reply_to_user="We will look into it.", confidence="medium", abstain=False)
+
+    fake = ScriptedModel(pointers)
+    result = DraftAgent(bundle, fake).draft(*VPN)
+
+    assert result["status"] == "drafted"
+    assert result["guards"]["rewritten_steps"] == 2
+    resolutions = {s["reference"]: s["resolution"] for s in result["sources"]}
+    for step in result["steps"]:
+        assert step["action"] == resolutions[step["source"]]
+        assert not step["action"].lower().startswith("review")
+
+
+def test_a_real_citation_on_invented_advice_is_discarded(bundle):
+    def stapled(messages):
+        first = retrieved(messages)[0]
+        return submit(summary="VPN.", steps=[
+            {"action": "Replace the motherboard and reinstall Windows from scratch.", "source": first["reference"]},
+            {"action": first["resolution"], "source": first["reference"]},
+        ], reply_to_user="On it.", confidence="high", abstain=False)
+
+    result = DraftAgent(bundle, ScriptedModel(stapled)).draft(*VPN)
+    assert result["status"] == "drafted"
+    assert len(result["steps"]) == 1
+    assert "motherboard" not in result["steps"][0]["action"].lower()
+    assert result["guards"]["rejected_steps"] == 1
+
+
+def test_an_abstention_says_when_steps_were_ungrounded_rather_than_uncited(bundle):
+    def only_invented(messages):
+        first = retrieved(messages)[0]
+        return submit(summary="VPN.", steps=[
+            {"action": "Replace the motherboard and reinstall Windows from scratch.", "source": first["reference"]},
+        ], reply_to_user="On it.", confidence="high", abstain=False)
+
+    result = DraftAgent(bundle, ScriptedModel(only_invented)).draft(*VPN)
+    assert result["status"] == "abstained"
+    assert "matched" in result["abstain_reason"]
+
+
 def test_the_model_is_allowed_to_say_no_match(bundle):
     fake = ScriptedModel(submit(summary="Vague report.", steps=[], reply_to_user="", confidence="low",
                                 abstain=True, abstain_reason="Nothing retrieved matches a vague description."))

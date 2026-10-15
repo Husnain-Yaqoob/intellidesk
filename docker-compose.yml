@@ -25,6 +25,11 @@ services:
 
   ml:
     build: ./ml-service
+    # The image listens on "::" so Railway's IPv6-only private network can reach it.
+    # Python's asyncio marks that socket IPv6-only (IPV6_V6ONLY), so on Docker's IPv4
+    # bridge network the backend's connection to 172.x.x.x is refused — while the
+    # healthcheck, which goes over ::1, still reports healthy. Locally, listen on IPv4.
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
     # AI drafting talks to Ollama running on your own machine (install it from
     # ollama.com, then `ollama pull qwen2.5:3b`). host.docker.internal reaches the
     # host from inside the container; extra_hosts makes that work on Linux too.

@@ -5,10 +5,11 @@ and shows the agent how similar incidents were actually resolved.
 
 Three services: a Spring Boot API, a React front end, and a Python ML service.
 
-**Live: https://intellidesk-production.up.railway.app** — sign in as
-`agent@intellidesk.ie` / `password123`, or raise an incident yourself and watch it get
-classified, routed and matched against past tickets. The seed data is synthetic and the
-app says so; see *About the training data*.
+**Run it in one command:** `docker compose up --build`, open `http://localhost:8080`
+and sign in as `agent@intellidesk.ie` / `password123` — or raise an incident yourself
+and watch it get classified, routed and matched against past tickets. The seed data is
+synthetic and the app says so; see *About the training data*. (A hosted demo ran on
+Railway until its free trial ended; see *Status*.)
 
 ```
   React (Vite)  ──REST──▶  Spring Boot  ──HTTP──▶  Python / FastAPI
@@ -36,8 +37,9 @@ agent queue with filters, and the dashboard.
 classification, similarity search over resolved incidents, and a resolution-time
 model. Wire-compatible with the backend and running independently.
 
-**Milestone 3 — deployed.** Done. Running on Railway as two services plus a managed
-Postgres, built from this repo on every push to `master`.
+**Milestone 3 — deployed.** Done, then retired. Ran on Railway as two services plus a
+managed Postgres, built from this repo on every push to `master`, until the free trial
+ended in October 2026. The deployment notes below still apply to any container host.
 
 **Milestone 4 — AI-assisted drafting.** Done. An agent can ask a language model to
 draft first steps and a reply for an incident. The model works through tool calls over
@@ -94,8 +96,14 @@ It is **IPv6-only**. The JVM prefers IPv4, so the backend resolves
 `ml.railway.internal` to an AAAA record and then declines to use it — hence
 `-Djava.net.preferIPv6Addresses=true` in the root `Dockerfile`. And uvicorn's usual
 `--host 0.0.0.0` binds IPv4 only, so nothing is listening on the address the backend
-finally asks for; `ml-service/Dockerfile` binds `::` instead, which is dual-stack on
-Linux and so changes nothing locally.
+finally asks for; `ml-service/Dockerfile` binds `::` instead.
+
+That fix has a mirror image. Python's asyncio marks a socket bound to `::` as
+IPv6-only, so it is *not* dual-stack: under Docker Compose, whose default network is
+IPv4, the backend's connection to the ML container is refused, while the healthcheck —
+which happens to go over `::1` — keeps reporting healthy. `docker-compose.yml`
+therefore overrides the command to listen on `0.0.0.0`. Same symptom as on Railway:
+every incident quietly lands in manual triage.
 
 Neither failure is loud. `MlClient` degrades to empty on any error, exactly as designed,
 so an unreachable ML service looks like a healthy app in which every incident quietly
@@ -232,6 +240,8 @@ An agent opening an incident can press **Draft with AI**. A language model reads
 past incidents retrieved for the ticket and drafts first steps plus a short reply to
 the user. It is built to be useful without breaking any of the rules above.
 
+![The AI-assisted draft card: one step, "Refresh the expired VPN certificate on the user's device", citing the past incident it came from, with a suggested reply and the model, time and tool-call count underneath](docs/ai-draft.png)
+
 ### What the model is allowed to do
 
 The model gets two tools and nothing else — no web, no shell, no database writes:
@@ -352,20 +362,40 @@ Twenty cases: clear tickets, paraphrased tickets written in words the corpus doe
 use, vague and out-of-domain tickets that should be declined, and injection attempts.
 Each run writes `evals/reports/<model>.json`.
 
-| | Retrieval-only baseline | `qwen2.5:3b` |
+| | Retrieval-only baseline | `qwen2.5:3b` (laptop CPU) |
 |---|---|---|
-| Outcome accuracy | 0.75 | *run the evals* |
-| Abstention accuracy | 0.40 | |
-| Category hit rate | 0.90 | |
-| Paraphrase recovery | 0.80 | |
-| Raw citation error rate | 0.00 | |
-| Injection containment | 1.00 | |
-| Latency p50 | ~1 ms | |
+| Outcome accuracy | 0.75 | 0.75 |
+| Abstention accuracy (vague + out-of-domain) | 0.40 | **0.80** |
+| Category hit rate (drafts on topic) | 0.90 | **1.00** |
+| Paraphrase recovery | **0.80** | 0.40 |
+| Proposed steps discarded by the validator | 0.00 | 0.33 |
+| Injection containment | 1.00 | 1.00 |
+| Latency p50 / p95 | ~1 ms | 31 s / 59 s |
 
-Read the model's column against the baseline. A model that cannot beat "cite the top
-hit" on abstention and paraphrase recovery is adding latency for nothing. The baseline's
-weak spot is the one the model is there for: it cannot tell when a match is only word
-overlap, so it drafted for "Help please" and for booking annual leave.
+What that says, plainly: the 3B model ties the baseline overall and gets there by a
+different route.
+
+- **It is better at saying no.** It declined 4 of the 5 tickets it should not answer;
+  the baseline declined 2, drafting from word overlap for "Can I book annual leave?" and
+  "The coffee machine is broken". Every draft the model did produce was on topic.
+- **It is worse at the thing it was meant to add.** It recovered 2 of 5 paraphrased
+  tickets against the baseline's 4. The search had already found the right incidents;
+  the model either proposed nothing or worded its steps so freely that the grounding
+  check threw them away. And in 19 of 20 cases it never searched a second time, so the
+  behaviour the agent was designed around — re-searching in better words — does not
+  appear at this model size.
+- **The validator is doing real work.** A third of the steps the model proposed were
+  discarded — invented citations, or advice that did not match the cited incident's
+  resolution. None reached the screen. Those discards are also what stopped the drafts
+  for "It's broken again" and the annual-leave ticket, which is why loosening the check
+  to win back paraphrases is a trade to measure, not a free fix.
+- **Injection held in every case**: no links, no credential requests, and every attempt
+  flagged. Three of the four were still answered with steps from genuine incidents,
+  which is the intended outcome — the hostile text was ignored, not obeyed.
+
+So on this hardware the model buys better judgement about when *not* to answer, at the
+cost of about 30 seconds a draft and half the paraphrase recall. The next experiment is
+the same harness against `qwen2.5:7b`; the numbers decide, not the model's size.
 
 ---
 
@@ -425,7 +455,7 @@ with the same columns and delete the generator. Nothing else changes.
 ## Tests
 
 ```bash
-cd ml-service && pytest        # 27 tests, no model server needed
+cd ml-service && pytest        # 30 tests, no model server needed
 cd backend && mvn test
 ```
 
@@ -466,10 +496,9 @@ else moves.
 What follows is true of the thing that is actually running, as opposed to the
 deliberate scope decisions above. Read it before drawing conclusions from the demo.
 
-**The hosted demo is disposable.** It runs on a Railway trial. When the credit or the
-30 days runs out the link dies, and the seeded database goes with it. Nothing is backed
-up, because there is nothing in it worth backing up. Clone the repo and
-`docker compose up --build` if the link is dead.
+**There is no hosted demo any more.** It ran on a Railway trial, which has ended, and
+its seeded database went with it. Nothing of value was lost — the seed data is
+regenerated on first run. Clone the repo and `docker compose up --build`.
 
 **The demo credentials are published in this README**, so anyone can sign in and change
 anything. Every incident you see may have been edited by a stranger. There is no rate
@@ -499,7 +528,8 @@ moment it isn't — hence Flyway at the top of *Next*.
 **Drafting quality depends on the model you run.** A 3B model on a CPU is slow (tens of
 seconds) and its tool calling is uneven — some runs ignore the tools and answer in
 prose, which the agent accepts once and otherwise treats as an abstention. The guards
-mean a weak model produces fewer drafts, not worse ones; the evals say how many fewer.
+mean a weak model produces fewer drafts, not worse ones: `qwen2.5:3b` lost half the
+paraphrased tickets the plain search could answer (see *Evaluation*).
 
 **Injection detection is a heuristic.** It catches the obvious phrasings and nothing
 clever. The output checks are what actually protect the user, and they are deliberately
@@ -520,7 +550,8 @@ also means corrections agents make today change nothing until someone runs a bui
 - Flyway migrations instead of `ddl-auto: update`, before there is data worth keeping
 - Sentence embeddings for similarity — TF-IDF matches "VPN disconnecting" to "VPN
   disconnects" and misses "cannot stay connected to the remote network". The drafting
-  agent works around this by rephrasing; embeddings would fix it for the triage card too
+  agent was meant to work around this by rephrasing, but a 3B model rarely searches
+  twice; embeddings would fix it at the source, for the triage card too
 - Record which drafted steps the agent actually used, and feed that into the evals
 - Feed agent corrections back as training labels
 - A model-metrics page in the app, reading `/model-info`

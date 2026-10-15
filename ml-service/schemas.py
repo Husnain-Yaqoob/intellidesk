@@ -82,6 +82,7 @@ class DraftGuards(BaseModel):
     injection_signals: List[str] = []
     redactions: int = 0
     rejected_steps: int = 0
+    rewritten_steps: int = 0
     links_removed: int = 0
     reply_withheld: bool = False
 
