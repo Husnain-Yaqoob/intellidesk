@@ -28,6 +28,11 @@ intellidesk:
     timeout-ms: 2000
     # Below this the classifier's answer is not trusted enough to route on.
     confidence-threshold: 0.60
+  llm:
+    # How long an agent's "Draft with AI" request may wait for the language model.
+    # Generous because a small model on a laptop CPU can take a while; incident
+    # creation never waits on this.
+    timeout-ms: ${LLM_TIMEOUT_MS:120000}
   cors:
     allowed-origins: ${CORS_ORIGINS:http://localhost:5173}
 

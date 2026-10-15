@@ -66,6 +66,7 @@ export const api = {
   assign: (id, teamId) => request(`/incidents/${id}/assign`, { method: 'POST', body: { teamId } }),
   resolve: (id, resolutionText) =>
     request(`/incidents/${id}/resolve`, { method: 'POST', body: { resolutionText } }),
+  aiDraft: (id) => request(`/incidents/${id}/ai-draft`, { method: 'POST' }),
 
   teams: () => request('/teams'),
   dashboard: () => request('/dashboard'),

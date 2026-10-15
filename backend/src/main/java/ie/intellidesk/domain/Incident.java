@@ -72,6 +72,17 @@ public class Incident {
     @Column(name = "ml_model_version", length = 40)
     private String mlModelVersion;
 
+    /**
+     * The last AI-assisted draft an agent asked for, stored for the same reason as the
+     * triage advice above: what the agent was shown is what the record should show,
+     * not whatever the model would say if asked again.
+     */
+    @Column(name = "ai_draft_json", columnDefinition = "text")
+    private String aiDraftJson;
+
+    @Column(name = "ai_draft_at")
+    private Instant aiDraftAt;
+
     // ---------------------------------------------------------------------------
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -146,6 +157,10 @@ public class Incident {
     public void setMlStepsJson(String json) { this.mlStepsJson = json; }
     public String getMlModelVersion() { return mlModelVersion; }
     public void setMlModelVersion(String v) { this.mlModelVersion = v; }
+    public String getAiDraftJson() { return aiDraftJson; }
+    public void setAiDraftJson(String json) { this.aiDraftJson = json; }
+    public Instant getAiDraftAt() { return aiDraftAt; }
+    public void setAiDraftAt(Instant at) { this.aiDraftAt = at; }
     public Team getAssignedTeam() { return assignedTeam; }
     public void setAssignedTeam(Team assignedTeam) { this.assignedTeam = assignedTeam; }
     public AppUser getCreatedBy() { return createdBy; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import AiDraftCard from '../components/AiDraftCard';
 import {
   PriorityPill,
   RiskPill,
@@ -106,6 +107,14 @@ export default function IncidentDetail({ user }) {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {isAgent && (
+            <AiDraftCard
+              draft={detail.aiDraft}
+              draftedAt={detail.aiDraftAt}
+              onDraft={async () => setDetail(await api.aiDraft(id))}
+            />
           )}
 
           <div className="card">

@@ -95,7 +95,16 @@ public final class Dtos {
             List<MlContract.SimilarIncident> similarIncidents,
             List<String> suggestedSteps,
             List<ActivityEntry> activity,
-            List<IncidentStatus> allowedTransitions) {
+            List<IncidentStatus> allowedTransitions,
+            MlContract.DraftResponse aiDraft,
+            Instant aiDraftAt) {
+
+        public IncidentDetail withoutAiDraft() {
+            return new IncidentDetail(summary, description, impact, urgency, subcategory,
+                    categoryConfidence, slaTargetHours, resolvedAt, resolutionText,
+                    actualResolutionHours, similarIncidents, suggestedSteps, activity,
+                    allowedTransitions, null, null);
+        }
     }
 
     public record CategoryCount(String category, long count) {

@@ -26,16 +26,26 @@ public class MlClient {
     private static final Logger log = LoggerFactory.getLogger(MlClient.class);
 
     private final RestClient client;
+    private final RestClient draftClient;
     private final boolean enabled;
 
     public MlClient(@Value("${intellidesk.ml.base-url:http://localhost:8000}") String baseUrl,
                     @Value("${intellidesk.ml.enabled:true}") boolean enabled,
-                    @Value("${intellidesk.ml.timeout-ms:2000}") int timeoutMs) {
+                    @Value("${intellidesk.ml.timeout-ms:2000}") int timeoutMs,
+                    @Value("${intellidesk.llm.timeout-ms:120000}") int draftTimeoutMs) {
         this.enabled = enabled;
+        this.client = client(baseUrl, timeoutMs, timeoutMs);
+        // Drafting runs a language model, which takes seconds rather than milliseconds,
+        // so it gets its own client with a long read timeout. Classification keeps its
+        // two-second budget: that call sits inside incident creation and must stay fast.
+        this.draftClient = client(baseUrl, timeoutMs, draftTimeoutMs);
+    }
+
+    private static RestClient client(String baseUrl, int connectMs, int readMs) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofMillis(timeoutMs));
-        factory.setReadTimeout(Duration.ofMillis(timeoutMs));
-        this.client = RestClient.builder()
+        factory.setConnectTimeout(Duration.ofMillis(connectMs));
+        factory.setReadTimeout(Duration.ofMillis(readMs));
+        return RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();
@@ -59,6 +69,25 @@ public class MlClient {
             // Expected whenever the ML service is not running. Not an error for the caller.
             log.warn("ML service unavailable ({}); incident will be flagged for manual triage",
                     e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Asks for an AI-assisted draft. Same contract as {@link #analyse}: any failure —
+     * drafting switched off, no model server, a timeout — comes back as empty.
+     */
+    public Optional<MlContract.DraftResponse> draft(String title, String description, String category) {
+        if (!enabled) return Optional.empty();
+        try {
+            var response = draftClient.post()
+                    .uri("/draft")
+                    .body(new MlContract.DraftRequest(title, description, category))
+                    .retrieve()
+                    .body(MlContract.DraftResponse.class);
+            return Optional.ofNullable(response);
+        } catch (Exception e) {
+            log.warn("AI drafting unavailable ({})", e.getClass().getSimpleName());
             return Optional.empty();
         }
     }

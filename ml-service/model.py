@@ -173,6 +173,7 @@ class Bundle:
                 "reference": str(row["reference"]),
                 "title": str(row["title"]),
                 "resolution": str(row["resolution"]),
+                "category": str(row["category"]),
                 "subcategory": str(row["subcategory"]),
                 "similarity": round(score, 3),
             })

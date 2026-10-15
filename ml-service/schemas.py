@@ -52,3 +52,63 @@ class ModelInfo(BaseModel):
     resolution_model_mae_hours: float
     baseline_mae_hours: float
     corpus_is_synthetic: bool
+
+
+# ---------------------------------------------------------------------------
+# LLM drafting. Mirrors MlContract.DraftRequest / DraftResponse.
+# ---------------------------------------------------------------------------
+
+class DraftRequest(BaseModel):
+    title: str = Field(max_length=200)
+    description: str = Field(max_length=5000)
+    category: Optional[str] = None
+
+
+class DraftStep(BaseModel):
+    action: str
+    source: str
+    source_title: str
+
+
+class DraftSource(BaseModel):
+    reference: str
+    title: str
+    resolution: str
+    similarity: float
+
+
+class DraftGuards(BaseModel):
+    injection_suspected: bool = False
+    injection_signals: List[str] = []
+    redactions: int = 0
+    rejected_steps: int = 0
+    links_removed: int = 0
+    reply_withheld: bool = False
+
+
+class DraftToolCall(BaseModel):
+    name: str
+    query: str
+    results: int
+
+
+class DraftTrace(BaseModel):
+    model: str
+    rounds: int
+    tool_calls: List[DraftToolCall] = []
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    latency_ms: int = 0
+
+
+class DraftResponse(BaseModel):
+    status: str                      # "drafted" | "abstained"
+    summary: str = ""
+    steps: List[DraftStep] = []
+    reply_to_user: str = ""
+    confidence: str = "low"
+    abstain_reason: str = ""
+    sources: List[DraftSource] = []
+    guards: DraftGuards
+    trace: DraftTrace
+    draft_version: str
