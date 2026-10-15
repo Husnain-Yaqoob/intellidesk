@@ -1,5 +1,6 @@
 package ie.intellidesk.web;
 
+import ie.intellidesk.service.AiDraftService;
 import ie.intellidesk.service.IncidentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -22,6 +23,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IncidentService.NotYoursException.class)
     ProblemDetail notYours(IncidentService.NotYoursException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
+    }
+
+    @ExceptionHandler(AiDraftService.UnavailableException.class)
+    ProblemDetail aiUnavailable(AiDraftService.UnavailableException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

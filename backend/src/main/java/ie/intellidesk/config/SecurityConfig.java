@@ -60,6 +60,7 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/assign").hasRole("AGENT")
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/status").hasRole("AGENT")
                     .requestMatchers(HttpMethod.POST, "/api/incidents/*/resolve").hasRole("AGENT")
+                    .requestMatchers(HttpMethod.POST, "/api/incidents/*/ai-draft").hasRole("AGENT")
                     // Everything else under /api needs a session.
                     .requestMatchers("/api/**").authenticated()
                     // Anything that isn't /api is the front end — index.html, the hashed

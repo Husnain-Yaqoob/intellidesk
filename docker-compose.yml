@@ -25,6 +25,21 @@ services:
 
   ml:
     build: ./ml-service
+    # The image listens on "::" so Railway's IPv6-only private network can reach it.
+    # Python's asyncio marks that socket IPv6-only (IPV6_V6ONLY), so on Docker's IPv4
+    # bridge network the backend's connection to 172.x.x.x is refused — while the
+    # healthcheck, which goes over ::1, still reports healthy. Locally, listen on IPv4.
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    # AI drafting talks to Ollama running on your own machine (install it from
+    # ollama.com, then `ollama pull qwen2.5:3b`). host.docker.internal reaches the
+    # host from inside the container; extra_hosts makes that work on Linux too.
+    # Without Ollama running, drafting answers 503 and everything else is unaffected.
+    environment:
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:3b}
+      LLM_ENABLED: ${LLM_ENABLED:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -43,6 +58,7 @@ services:
       DATABASE_USER: postgres
       DATABASE_PASSWORD: postgres
       ML_SERVICE_URL: http://ml:8000
+      LLM_TIMEOUT_MS: "120000"
       SEED_DEMO_DATA: "true"
       # nginx puts the SPA and the API on one origin, so CORS should not come into
       # play. It is set anyway, including the app's own origin: if a proxy ever

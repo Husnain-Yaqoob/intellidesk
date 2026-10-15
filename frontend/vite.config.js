@@ -12,6 +12,7 @@ export default defineConfig({
       '/api': {
         target: process.env.API_TARGET || 'http://localhost:8080',
         changeOrigin: false,
+        timeout: 150_000, // drafting a local model can take a minute
       },
     },
   },

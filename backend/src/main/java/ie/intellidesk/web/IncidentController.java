@@ -4,6 +4,7 @@ import ie.intellidesk.domain.AppUser;
 import ie.intellidesk.domain.IncidentStatus;
 import ie.intellidesk.domain.Role;
 import ie.intellidesk.repo.TeamRepository;
+import ie.intellidesk.service.AiDraftService;
 import ie.intellidesk.service.IncidentService;
 import ie.intellidesk.web.dto.Dtos;
 import jakarta.validation.Valid;
@@ -20,11 +21,14 @@ import java.util.List;
 public class IncidentController {
 
     private final IncidentService service;
+    private final AiDraftService aiDrafts;
     private final CurrentUserResolver currentUser;
     private final TeamRepository teams;
 
-    public IncidentController(IncidentService service, CurrentUserResolver currentUser, TeamRepository teams) {
+    public IncidentController(IncidentService service, AiDraftService aiDrafts,
+                              CurrentUserResolver currentUser, TeamRepository teams) {
         this.service = service;
+        this.aiDrafts = aiDrafts;
         this.currentUser = currentUser;
         this.teams = teams;
     }
@@ -71,7 +75,7 @@ public class IncidentController {
                                        Authentication authentication) {
         AppUser user = currentUser.require(authentication);
         service.addNote(id, user, request.comment());
-        return service.detail(id);
+        return service.detailFor(id, user);
     }
 
     @PostMapping("/incidents/{id}/status")
@@ -95,6 +99,19 @@ public class IncidentController {
                                        @Valid @RequestBody Dtos.ResolveRequest request,
                                        Authentication authentication) {
         service.resolve(id, currentUser.require(authentication), request.resolutionText());
+        return service.detail(id);
+    }
+
+    /**
+     * Agent-only (see SecurityConfig). Synchronous on purpose: the agent clicked the
+     * button and is waiting for the answer. Incident creation never waits on this.
+     */
+    @PostMapping("/incidents/{id}/ai-draft")
+    public Dtos.IncidentDetail aiDraft(@PathVariable Long id, Authentication authentication) {
+        AppUser agent = currentUser.require(authentication);
+        if (!aiDrafts.draft(id, agent)) {
+            throw new AiDraftService.UnavailableException();
+        }
         return service.detail(id);
     }
 
